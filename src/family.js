@@ -1,113 +1,113 @@
 /* eslint-disable no-await-in-loop */
 require("dotenv").config();
+const { pushPlusNotify } = require('./sendNotify.js');
 const log4js = require("log4js");
+const recording = require("log4js/lib/appenders/recording");
+log4js.configure({
+    appenders: {
+        vcr: { type: "recording" },
+        out: { type: "console" }
+    },
+    categories: { default: { appenders: ["vcr", "out"], level: "info" } },
+});
+
+const logger = log4js.getLogger();
+const superagent = require("superagent");
 const { CloudClient } = require("cloud189-sdk");
+const accounts = require("./accounts");
 const { sendNotify } = require("./sendNotify");
 
-// 日志配置
-log4js.configure({
-  appenders: {
-    debug: {
-      type: "console",
-      layout: { type: "pattern", pattern: "%[%d{hh:mm:ss} %p %f{1}:%l%] %m" }
-    }
-  },
-  categories: { default: { appenders: ["debug"], level: "debug" } }
-});
-const logger = log4js.getLogger();
+const mask = (s, start, end) => s.split("").fill("*", start, end).join("");
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const threadx = 10; // 签到线程数（不建议修改）
 
-// 调试工具
-const benchmark = {
-  start: Date.now(),
-  lap() {
-    return ((Date.now() - this.start) / 1000).toFixed(2) + 's';
-  }
+const doTask = async (cloudClient, familyID) => {
+    const result = [];
+    const signPromises1 = [];
+    let getSpace = "签到个人云获得";
+
+    // 处理个人签到
+    for (let i = 0; i < threadx; i++) {
+        signPromises1.push((async () => {
+            const res1 = await cloudClient.userSign();
+            if (!res1.isSign) return res1.netdiskBonus;
+            return 0;
+        })());
+    }
+
+    // 处理个人签到结果
+    const personalResults = await Promise.all(signPromises1);
+    const totalPersonal = personalResults.reduce((a, b) => a + b, 0);
+    result.push(`${getSpace} ${totalPersonal}M`);
+
+    // 处理家庭签到
+    const { familyInfoResp } = await cloudClient.getFamilyList();
+    if (familyInfoResp) {
+        const family = familyInfoResp.find(f => f.familyId == familyID) || familyInfoResp[0];
+        result.push(`签到家庭云 ID: ${family.familyId}`);
+
+        const signPromises2 = [];
+        let familySpace = "获得";
+        for (let i = 0; i < threadx; i++) {
+            signPromises2.push((async () => {
+                const res = await cloudClient.familyUserSign(family.familyId);
+                if (!res.signStatus) return res.bonusSpace;
+                return 0;
+            })());
+        }
+
+        // 处理家庭签到结果
+        const familyResults = await Promise.all(signPromises2);
+        const totalFamily = familyResults.reduce((a, b) => a + b, 0);
+        result.push(`${familySpace} ${totalFamily}M`);
+    }
+    return result;
 };
 
-// 核心签到逻辑
-async function stressTest(account, familyId) {
-  let personalTotal = 0, familyTotal = 0;
-  const report = [];
+async function main() {
+    let results = [];
+    let totalFamilyBonus = 0;
+    const familyID = process.env.FAMILYID;
 
-  try {
-    logger.debug(`🚦 开始压力测试 (账号: ${mask(account.userName)})`);
+    for (let index = 0; index < accounts.length; index++) {
+        const account = accounts[index];
+        const { userName, password } = account;
+        if (!userName || !password) continue;
 
-    const client = new CloudClient(account.userName, account.password);
-    await client.login().catch(() => { throw new Error('登录失败') });
+        const maskedName = mask(userName, 3, 7);
+        logger.info(`**** 账号 ${maskedName} 开始执行 ****`);
 
-    // 个人签到5连击
-    const personalResults = await Promise.allSettled(
-      Array(5).fill().map(() =>
-        client.userSign()
-          .then(res => res.netdiskBonus)
-          .catch(() => 0)
-      )
-    );
-    personalTotal = personalResults.reduce((sum, r) => sum + (r.value || 0), 0);
-    report.push(`🎯 个人签到完成 累计获得: ${personalTotal}MB`);
+        try {
+            const cloudClient = new CloudClient(userName, password);
+            await cloudClient.login();
+            const taskResult = await doTask(cloudClient, familyID);
 
-    // 家庭签到8连击
-    const familyResults = await Promise.allSettled(
-      Array(8).fill().map(() =>
-        client.familyUserSign(familyId)
-          .then(res => res.bonusSpace)
-          .catch(() => 0)
-      )
-    );
-    familyTotal = familyResults.reduce((sum, r) => sum + (r.value || 0), 0);
-    report.push(`🏠 家庭签到完成 本次获得: ${familyTotal}MB`);
+            // 提取家庭奖励数值
+            const familyBonus = taskResult.length > 2
+                ? parseInt(taskResult[2].match(/\d+/)[0], 10)
+                : 0;
+            totalFamilyBonus += familyBonus;
 
-    return {
-      success: true,
-      personalTotal,
-      familyTotal,
-      report: `账号 ${mask(account.userName)}\n${report.join('\n')}`
-    };
-  } catch (e) {
-    return {
-      success: false,
-      report: `❌ ${mask(account.userName)} 签到失败: ${e.message}`
-    };
-  }
+            results.push(`账号${index + 1} (${maskedName}): ${taskResult.join("，")}`);
+        } catch (e) {
+            logger.error(`执行失败: ${e}`);
+            results.push(`账号${index + 1} 执行失败`);
+        }
+
+        logger.info(`**** 账号 ${maskedName} 执行完毕 ****`);
+        await delay(5000);
+    }
+
+    // 构建最终结果
+    results.push("---", `汇总所有账号家庭奖励: ${totalFamilyBonus}M`);
+    return results.join("\n");
 }
 
-// 辅助方法
-function mask(s) {
-  return s.replace(/(\d{3})\d+(\d{4})/, '$1****$2');
-}
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// 执行测试
 (async () => {
-  try {
-    logger.debug("🔥 启动专项压力测试");
-    const accounts = require("./accounts");
-    const familyId = process.env.FAMILYID;
-    if (!familyId) {
-      throw new Error('未配置环境变量 FAMILYID');
+    try {
+        const result = await main();
+        await sendNotify("天翼云盘签到结果", result);
+    } finally {
+        recording.erase();
     }
-    let totalFamily = 0;
-    const reports = [];
-
-    for (let index = 0; index < accounts.length; index += 1) {
-      const account = accounts[index];
-      const { userName, password } = account;
-      if (!userName || !password) {
-        logger.error(`账号配置错误: accounts[${index}]`);
-        continue; // Skip to the next account if configuration is invalid
-      }
-      const accountConfig = { userName, password };
-      const result = await stressTest(accountConfig, familyId);
-      reports.push(result.report);
-      if (result.success) totalFamily += result.familyTotal;
-      if (accounts.length > 1 && index < accounts.length - 1) await sleep(5000); // 多账号间隔5秒, 最后一个账号不等待
-    }
-
-    const finalReport = `${reports.join('\n\n')}\n\n🏠 所有家庭签到累计获得: ${totalFamily}MB\n执行耗时: ${benchmark.lap()}`;
-    sendNotify('天翼云压力测试报告', finalReport);
-    logger.debug("📊 测试结果:\n" + finalReport);
-  } catch (e) {
-    logger.error('致命错误:', e.message);
-    process.exit(1);
-  }
 })();
