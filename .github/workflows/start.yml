@@ -1,42 +1,200 @@
-
-name: Action
-
+name: Cloud check in action
 on:
+  push:
+    branches:
+      - main
+      - dev
   watch:
     types: started
   workflow_dispatch:
   schedule:
-    - cron: 20 8 * * *
-
-
+    - cron: '0 3,21 * * *'
 jobs:
-    build:
-      runs-on: ubuntu-20.04
+  build-and-deploy-19071507010:
+    runs-on: ubuntu-latest
+    environment: 19071507010
+    steps:
+      - uses: actions/checkout@main
 
-      steps:
-        - name: 更改交换空间并link构建空间
-          uses: zhlhlf/maximize-build-space@master
-          with:
-            swap-size-mb: 8192
-            
-        - name: 获取本仓库源码
-          uses: actions/checkout@main
-          
-        - uses: actions/checkout@main
-        - name: Setup Node.js environment
-          uses: actions/setup-node@main
-          with:
-            node-version: 18
-            
-        - name: 操作
-          run: |  
-              export tyys="${{ secrets.tyys }}"
-              export tyy_family_id="${{ secrets.tyy_family_id }}"
-              export TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
-              export TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-              export WX_PUSHER_APP_TOKEN="${{ secrets.WX_PUSHER_APP_TOKEN }}"
-              export WX_PUSHER_UID="${{ secrets.WX_PUSHER_UID }}"
-              
-              npm install >/dev/null 2>&1
-              npm start
-              
+      - name: Setup Node.js environment
+        uses: actions/setup-node@main
+        with:
+          node-version: 18
+
+      - name: init secrets
+        uses: shine1594/secrets-to-env-action@master
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          secrets_env: production
+          prefix_prod: ""
+          file_name_prod: .env
+
+      - name: init
+        run: npm install
+
+      - name: run
+        id: run
+        uses: nick-fields/retry@master
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: npm start
+
+      - name: Keep Running
+        run: |
+          git config --local user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git config --local user.name "${{ github.actor }}"
+          git remote set-url origin https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}
+          git pull --rebase --autostash
+          git commit --allow-empty -m "Keep Running..."
+          git push
+
+      - name: Delete old workflow run
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 50
+
+  build-and-deploy-bing7027:
+    runs-on: ubuntu-latest
+    environment: bing7027
+    steps:
+      - uses: actions/checkout@main
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@main
+        with:
+          node-version: 18
+
+      - name: init secrets
+        uses: shine1594/secrets-to-env-action@master
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          secrets_env: production
+          prefix_prod: ""
+          file_name_prod: .env
+
+      - name: init
+        run: npm install
+
+      - name: run
+        id: run
+        uses: nick-fields/retry@master
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: npm start
+
+      - name: Keep Running
+        run: |
+          git config --local user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git config --local user.name "${{ github.actor }}"
+          git remote set-url origin https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}
+          git pull --rebase --autostash
+          git commit --allow-empty -m "Keep Running..."
+          git push
+
+      - name: Delete old workflow run
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 50
+
+  build-and-deploy-user:
+    runs-on: ubuntu-latest
+    environment: user
+    steps:
+      - uses: actions/checkout@main
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@main
+        with:
+          node-version: 18
+
+      - name: init secrets
+        uses: shine1594/secrets-to-env-action@master
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          secrets_env: production
+          prefix_prod: ""
+          file_name_prod: .env
+
+      - name: init
+        run: npm install
+
+      - name: run
+        id: run
+        uses: nick-fields/retry@master
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: npm start
+
+      - name: Keep Running
+        run: |
+          git config --local user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git config --local user.name "${{ github.actor }}"
+          git remote set-url origin https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}
+          git pull --rebase --autostash
+          git commit --allow-empty -m "Keep Running..."
+          git push
+
+      - name: Delete old workflow run
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 50
+
+
+  build-and-deploy-4:
+    runs-on: ubuntu-latest
+    environment: 4
+    steps:
+      - uses: actions/checkout@main
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@main
+        with:
+          node-version: 18
+
+      - name: init secrets
+        uses: shine1594/secrets-to-env-action@master
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          secrets_env: production
+          prefix_prod: ""
+          file_name_prod: .env
+
+      - name: init
+        run: npm install
+
+      - name: run
+        id: run
+        uses: nick-fields/retry@master
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: npm start
+
+      - name: Keep Running
+        run: |
+          git config --local user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git config --local user.name "${{ github.actor }}"
+          git remote set-url origin https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}
+          git pull --rebase --autostash
+          git commit --allow-empty -m "Keep Running..."
+          git push
+
+      - name: Delete old workflow run
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 50
