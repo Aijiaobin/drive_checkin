@@ -40,7 +40,8 @@ async function stressTest(account, familyId) {
       client.userSign()
         .then(res => {
           const mb = res.netdiskBonus;
-          report.push(`[${Date.now()}] 🎯 个人签到 ✅ 获得: ${mb}MB`);
+          // report.push(`[${Date.now()}] 🎯 个人签到 ✅ 获得: ${mb}MB`);
+          logger.debug(`[${Date.now()}] 🎯 个人签到 ✅ 获得: ${mb}MB`);
           return mb;
         })
         .catch(err => {
@@ -57,7 +58,8 @@ async function stressTest(account, familyId) {
       client.familyUserSign(familyId)
         .then(res => {
           const mb = res.bonusSpace;
-          report.push(`[${Date.now()}] 🏠 家庭签到 ✅ 获得: ${mb}MB`);
+          // report.push(`[${Date.now()}] 🏠 家庭签到 ✅ 获得: ${mb}MB`);
+          logger.debug(`[${Date.now()}] 🏠 家庭签到 ✅ 获得: ${mb}MB`);
           return mb;
         })
         .catch(err => {
