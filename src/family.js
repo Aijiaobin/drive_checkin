@@ -24,6 +24,16 @@ const benchmark = {
   }
 };
 
+// 新增工具函数：带超时的 Promise
+function timeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`请求超时（${ms}ms）`)), ms)
+    )
+  ]);
+}
+
 // 核心签到逻辑
 async function stressTest(account, familyId) {
   let personalTotal = 0, familyTotal = 0;
@@ -35,17 +45,17 @@ async function stressTest(account, familyId) {
     const client = new CloudClient(account.userName, account.password);
     await client.login().catch(() => { throw new Error('登录失败') });
 
-    // 个人签到5连击（并行执行+实时日志）
+    // 个人签到10连击（新增30秒超时）
     const personalPromises = Array(10).fill().map(() =>
-      client.userSign()
+      timeout(client.userSign(), 30000)  // 30秒超时控制
         .then(res => {
           const mb = res.netdiskBonus;
-          // report.push(`[${Date.now()}] 🎯 个人签到 ✅ 获得: ${mb}MB`);
           logger.debug(`[${Date.now()}] 🎯 个人签到 ✅ 获得: ${mb}MB`);
           return mb;
         })
         .catch(err => {
-          report.push(`[${Date.now()}] 🎯 个人签到 ❌ 获得: 0MB (原因: ${err.message})`);
+          const message = err.message.includes("超时") ? `请求超时（30秒）` : err.message;
+          report.push(`[${Date.now()}] 🎯 个人签到 ❌ 获得: 0MB (原因: ${message})`);
           return 0;
         })
     );
@@ -53,17 +63,17 @@ async function stressTest(account, familyId) {
     personalTotal = personalResults.reduce((sum, r) => sum + r.value, 0);
     report.push(`🎯 个人签到完成 累计获得: ${personalTotal}MB`);
 
-    // 家庭签到8连击（并行执行+实时日志）
+    // 家庭签到8连击（新增30秒超时）
     const familyPromises = Array(8).fill().map(() =>
-      client.familyUserSign(familyId)
+      timeout(client.familyUserSign(familyId), 30000)  // 30秒超时控制
         .then(res => {
           const mb = res.bonusSpace;
-          // report.push(`[${Date.now()}] 🏠 家庭签到 ✅ 获得: ${mb}MB`);
           logger.debug(`[${Date.now()}] 🏠 家庭签到 ✅ 获得: ${mb}MB`);
           return mb;
         })
         .catch(err => {
-          report.push(`[${Date.now()}] 🏠 家庭签到 ❌ 获得: 0MB (原因: ${err.message})`);
+          const message = err.message.includes("超时") ? `请求超时（30秒）` : err.message;
+          report.push(`[${Date.now()}] 🏠 家庭签到 ❌ 获得: 0MB (原因: ${message})`);
           return 0;
         })
     );
@@ -108,13 +118,13 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
       const { userName, password } = account;
       if (!userName || !password) {
         logger.error(`账号配置错误: accounts[${index}]`);
-        continue; // Skip to the next account if configuration is invalid
+        continue;
       }
       const accountConfig = { userName, password };
       const result = await stressTest(accountConfig, familyId);
       reports.push(result.report);
       if (result.success) totalFamily += result.familyTotal;
-      if (accounts.length > 1 && index < accounts.length - 1) await sleep(5000); // 多账号间隔5秒, 最后一个账号不等待
+      if (accounts.length > 1 && index < accounts.length - 1) await sleep(5000);
     }
 
     const finalReport = `${reports.join('\n\n')}\n\n🏠 所有家庭签到累计获得: ${totalFamily}MB\n执行耗时: ${benchmark.lap()}`;
